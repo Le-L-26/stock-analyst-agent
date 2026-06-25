@@ -1,0 +1,30 @@
+# Render Blueprint for the NUXT app (frontend + /api/chat agent).
+#
+# Push this repo to GitHub, then in Render: New > Blueprint, point it at the repo.
+# Render reads this file and creates the web service. Fill the env vars marked
+# `sync: false` in the dashboard (Render won't store secrets in git).
+#
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: stock-analyst-agent
+    runtime: node
+    plan: free
+    # corepack activates the pnpm version pinned in package.json
+    buildCommand: corepack enable && pnpm install --no-frozen-lockfile && pnpm run build
+    startCommand: node .output/server/index.mjs
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Your Claude key — paste in the Render dashboard.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # Public URL of the data-bridge service (the other Render service).
+      - key: DATA_BRIDGE_URL
+        sync: false
+      # Must match BRIDGE_TOKEN on the bridge. Render can generate one for you.
+      - key: BRIDGE_TOKEN
+        sync: false
+      # Shared password that locks the whole site (HTTP Basic Auth).
+      - key: SITE_PASSWORD
+        sync: false
