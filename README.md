@@ -45,7 +45,7 @@ See [`.env.example`](.env.example). Summary:
 | `ANTHROPIC_API_KEY` | this app | Claude API key (required) |
 | `DATA_BRIDGE_URL` | this app | Bridge URL; defaults to `http://127.0.0.1:8077` |
 | `BRIDGE_TOKEN` | both | Shared secret; must match on app and bridge |
-| `SITE_PASSWORD` | this app | When set, locks the whole site behind HTTP Basic Auth |
+| `SITE_PASSWORD` | this app | When set, gates `/api/chat` behind the in-app login page (cookie session). Unset = open (local dev) |
 | `FINANCIAL_DATASETS_API_KEY` | bridge | Data source for US/foreign fundamentals |
 
 ## Deploying (Render)

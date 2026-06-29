@@ -1,38 +1,31 @@
 // server/middleware/auth.ts
 //
-// PASSWORD GATE for the whole site.
+// PASSWORD GATE for the expensive API.
 //
-// The app is public (anyone with the link can reach it) and every request to
-// /api/chat spends real money on Claude + the data API. To stop strangers and
-// bots from running up the bill, we put one shared password in front of
-// EVERYTHING using HTTP Basic Auth.
+// Every call to /api/chat spends real money on Claude + the data API, so we gate
+// it behind a session cookie that only our /api/login endpoint hands out.
 //
-//   - Set SITE_PASSWORD in the host's env to turn the gate ON.
-//   - Leave it unset (e.g. local dev) and the gate is OFF — nothing changes.
+// We do NOT gate the page itself: it loads as a login form first, and only the
+// API endpoints cost money. We also let /api/login through (you can't log in if
+// the gate blocks the login call) and leave it open in local dev (no SITE_PASSWORD).
 //
-// How visitors get in: the browser shows a native "username / password" popup.
-// The username is ignored; they just type the shared password. The browser then
-// remembers it and attaches it to every later request automatically (including
-// the /api/chat fetches), so they only enter it once.
+// (This replaces the old HTTP Basic Auth popup — we needed a real login page so
+// it could carry the language toggle and localized labels.)
 
 export default defineEventHandler((event) => {
-  const password = process.env.SITE_PASSWORD?.trim()
+  const path = event.path || ''
 
-  // No password configured → gate disabled (keeps local dev frictionless).
-  if (!password)
+  // Only the API needs protecting; static pages/assets load freely.
+  if (!path.startsWith('/api/'))
     return
 
-  const header = getRequestHeader(event, 'authorization') ?? ''
+  // The login endpoint must stay reachable, and local dev (no password) is open.
+  if (path.startsWith('/api/login') || authDisabled())
+    return
 
-  if (header.startsWith('Basic ')) {
-    // Decode "Basic base64(user:pass)" and compare only the password half.
-    const decoded = Buffer.from(header.slice(6), 'base64').toString('utf8')
-    const supplied = decoded.slice(decoded.indexOf(':') + 1)
-    if (supplied === password)
-      return // authorized — let the request through
-  }
+  // Valid session cookie? Let it through. Otherwise refuse (the SPA shows login).
+  if (getCookie(event, AUTH_COOKIE) === expectedToken())
+    return
 
-  // Missing or wrong password → challenge the browser to prompt for it.
-  setResponseHeader(event, 'WWW-Authenticate', 'Basic realm="Stock Analyst Agent"')
   throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
 })

@@ -15,6 +15,7 @@ import { anthropic } from '@ai-sdk/anthropic'
 import { convertToModelMessages, stepCountIs, streamText, tool, type UIMessage } from 'ai'
 import { z } from 'zod'
 import { getExperts } from '../../app/experts'
+import { asLang, type Lang } from '../../app/i18n'
 
 // Where the Python data bridge (scripts/agent_bridge.py) is listening. Override
 // with DATA_BRIDGE_URL in .env if you run it on another port/host.
@@ -28,13 +29,26 @@ const BRIDGE_TOKEN = process.env.BRIDGE_TOKEN || ''
 
 // Build the system prompt for one OR several analysts. The output-format rules
 // are the same either way; only the "panel vs solo" framing changes.
-function buildSystemPrompt(experts: { name: string, philosophy: string }[]): string {
+function buildSystemPrompt(experts: { name: string, philosophy: string }[], lang: Lang): string {
   const multi = experts.length > 1
   const roster = experts
     .map(e => `### ${e.name}\n${e.philosophy}`)
     .join('\n\n')
 
+  // The language the visitor chose on the login page. We make this a HARD rule at
+  // the very top so every part of the answer — headings, table cells, bullets and
+  // the closing disclaimer — comes back in that language.
+  const languageRule = lang === 'zh'
+    ? '## 语言要求（最重要）\n你必须用【简体中文】输出全部内容，包括所有标题、表格内容、要点和结尾的免责声明。'
+      + '专有名词（如公司名、投资人姓名、股票代码）可保留英文。\n'
+    : '## Language\nWrite your ENTIRE response in English.\n'
+
+  const disclaimer = lang === 'zh'
+    ? '最后单独用一行斜体写：*仅供学习参考，不构成投资建议。*'
+    : 'End with a single italic line: *Educational analysis, not investment advice.*'
+
   return [
+    languageRule,
     multi
       ? `You are a panel of ${experts.length} legendary investors analyzing a stock. Each member `
         + 'reasons strictly in their own style. The panelists are:'
@@ -70,24 +84,25 @@ function buildSystemPrompt(experts: { name: string, philosophy: string }[]): str
         + 'and the overall lean. Make it impossible to miss.'
       : '**4. ✅ Bottom line** — one or two bolded sentences with the clear takeaway.',
     '',
-    'End with a single italic line: *Educational analysis, not investment advice.*',
+    disclaimer,
   ].join('\n')
 }
 
 export default defineEventHandler(async (event) => {
   // The browser sends the full conversation plus which expert lens(es) to use.
   // `expertIds` is the new multi-select field; `expertId` kept for backwards compat.
-  const { messages, expertIds, expertId } = await readBody<{
+  const { messages, expertIds, expertId, lang } = await readBody<{
     messages: UIMessage[]
     expertIds?: string[]
     expertId?: string
+    lang?: string
   }>(event)
 
   const experts = getExperts(expertIds ?? (expertId ? [expertId] : []))
 
   const result = streamText({
     model: anthropic('claude-opus-4-8'),
-    system: buildSystemPrompt(experts),
+    system: buildSystemPrompt(experts, asLang(lang)),
     messages: await convertToModelMessages(messages),
 
     // Let the model run a multi-step loop: call the tool, read the result, then
