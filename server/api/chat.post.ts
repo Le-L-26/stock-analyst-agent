@@ -124,7 +124,13 @@ export default defineEventHandler(async (event) => {
           const url = `${DATA_BRIDGE_URL}/financials?ticker=${encodeURIComponent(ticker)}`
           try {
             const res = await $fetch(url, {
-              timeout: 30_000,
+              // 75s, not 30s: on free-tier hosting the bridge spins down after
+              // ~15min idle and a cold start takes ~45s to wake. A 30s timeout
+              // gave up mid-wake, surfacing as a 502 to the user. This window
+              // lets the first request after idle wait the bridge out. (A
+              // /health pinger keeping the bridge warm is the real fix; this is
+              // the safety net for when it still goes cold.)
+              timeout: 75_000,
               headers: BRIDGE_TOKEN ? { 'X-Bridge-Token': BRIDGE_TOKEN } : {},
             })
             return res
