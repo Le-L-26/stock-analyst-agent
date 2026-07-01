@@ -101,7 +101,7 @@ export default defineEventHandler(async (event) => {
   const experts = getExperts(expertIds ?? (expertId ? [expertId] : []))
 
   const result = streamText({
-    model: anthropic('claude-opus-4-8'),
+    model: anthropic('claude-haiku-4-5'),
     system: buildSystemPrompt(experts, asLang(lang)),
     messages: await convertToModelMessages(messages),
 
